@@ -1,71 +1,71 @@
 # Todo App Demo
 
-一个用来练习 **REST API 设计（CRUD）**、**OpenAPI 文档**的最小化 Demo。前后端都在同一个 Next.js 项目里：页面走前端渲染，接口走 App Router 的 Route Handlers，数据存在本地 SQLite 文件里。
+**REST API 設計（CRUD）・OpenAPI ドキュメント**を練習するための最小構成の Demo。フロントエンドとバックエンドは同じ Next.js プロジェクトの中にある：画面はフロントエンドでレンダリングし、API は App Router の Route Handlers が担当、データはローカルの SQLite ファイルに保存する。
 
-## 技术栈
+## 技術スタック
 
-| | 技术 |
+| | 技術 |
 |---|---|
-| 框架 | Next.js 16（App Router）+ TypeScript + Tailwind CSS |
-| API | Next.js Route Handlers（`app/api/**/route.ts`），纯 REST，无框架依赖 |
-| 数据 | SQLite，用 Node.js 内置的 `node:sqlite` 模块（`DatabaseSync`），文件存在 `data/todos.db` |
-| API 文档 | `openapi.yaml`（OpenAPI 3.0），配合 [`@scalar/nextjs-api-reference`](https://github.com/scalar/scalar) 渲染成可交互的文档页面 |
+| フレームワーク | Next.js 16（App Router）+ TypeScript + Tailwind CSS |
+| API | Next.js の Route Handlers（`app/api/**/route.ts`）。純粋な REST で、追加のフレームワークには依存しない |
+| データ | SQLite。Node.js 組み込みの `node:sqlite` モジュール（`DatabaseSync`）を使用し、ファイルは `data/todos.db` に保存される |
+| API ドキュメント | `openapi.yaml`（OpenAPI 3.0）を [`@scalar/nextjs-api-reference`](https://github.com/scalar/scalar) で操作可能なドキュメントページとしてレンダリング |
 
-## 前置要求
+## 前提条件
 
-- **Node.js 22.5+**（推荐 22.5+ / 24+）—— 因为用到了内置的 `node:sqlite`，低版本没有这个模块或需要 `--experimental-sqlite` 标志
+- **Node.js 22.5+**（推奨: 22.5+ / 24+）—— 組み込みの `node:sqlite` を使用しているため。それより古いバージョンにはこのモジュールがない、または `--experimental-sqlite` フラグが必要
 
-## 快速开始
+## 起動方法
 
 ```bash
 npm install
 npm run dev
 ```
 
-打开 `http://localhost:3000` 使用待办事项列表；打开 `http://localhost:3000/api-docs` 查看可交互的 API 文档（Scalar 渲染的 `openapi.yaml`）。
+`http://localhost:3000` を開くと Todo リストの画面が使える。`http://localhost:3000/api-docs` を開くと、`openapi.yaml` を Scalar でレンダリングした操作可能な API ドキュメントが見られる。
 
-数据会写到项目目录下的 `data/todos.db`（SQLite 文件），首次运行自动创建，删掉这个文件就相当于清空所有数据。
+データはプロジェクト直下の `data/todos.db`（SQLite ファイル）に書き込まれる。初回起動時に自動作成され、このファイルを削除すれば全データがリセットされる。
 
-## 目录结构
+## ディレクトリ構成
 
 ```
 todo-app-demo/
 ├── app/
-│   ├── page.tsx                      # 待办事项列表页面
+│   ├── page.tsx                      # Todo リストの画面
 │   ├── api/
-│   │   ├── todos/route.ts            # GET（列表，支持 status/sort 筛选排序）、POST（新建）
-│   │   ├── todos/[id]/route.ts       # GET / PATCH / DELETE 单条任务
-│   │   └── openapi.json/route.ts     # 把 openapi.yaml 转成 JSON 供文档页面消费
-│   └── api-docs/route.ts             # /api-docs 页面：用 Scalar 渲染 OpenAPI 文档
-├── components/                       # TodoForm / TodoList / TodoItem / FilterBar 等 UI 组件
+│   │   ├── todos/route.ts            # GET（一覧、status/sort での絞り込み・並び替えに対応）、POST（新規作成）
+│   │   ├── todos/[id]/route.ts       # GET / PATCH / DELETE（1件のタスクの取得・更新・削除）
+│   │   └── openapi.json/route.ts     # openapi.yaml を JSON に変換し、ドキュメントページへ渡す
+│   └── api-docs/route.ts             # /api-docs ページ：Scalar で OpenAPI ドキュメントをレンダリング
+├── components/                       # TodoForm / TodoList / TodoItem / FilterBar などの UI コンポーネント
 ├── lib/
-│   ├── db.ts                         # SQLite 读写：listTodos / insertTodo / updateTodo / deleteTodo
-│   ├── todoQuery.ts                  # 列表的筛选（filterTodos）和排序（sortTodos）逻辑
-│   └── todoStatus.ts                 # 优先级文案、判断任务是否过期/今天到期
-├── types/todo.ts                     # Todo / 分类 / 优先级 / 筛选 / 排序的类型定义
-└── openapi.yaml                      # 接口的 OpenAPI 3.0 定义，是 /api-docs 的数据源
+│   ├── db.ts                         # SQLite の読み書き：listTodos / insertTodo / updateTodo / deleteTodo
+│   ├── todoQuery.ts                  # 一覧の絞り込み（filterTodos）と並び替え（sortTodos）のロジック
+│   └── todoStatus.ts                 # 優先度のラベル、タスクが期限切れ／今日が期限かどうかの判定
+├── types/todo.ts                     # Todo・カテゴリ・優先度・フィルタ・ソートの型定義
+└── openapi.yaml                      # API の OpenAPI 3.0 定義。/api-docs のデータソース
 ```
 
-## 功能与练习点
+## 機能と練習ポイント
 
-- **CRUD**：`GET/POST /api/todos`、`GET/PATCH/DELETE /api/todos/{id}`，对应任务的增删改查。
-- **筛选与排序**：`GET /api/todos?status=active&sort=dueDate` —— `status` 支持 `all/active/completed`，`sort` 支持 `createdAt/dueDate/priority`（逻辑在 `lib/todoQuery.ts`）。
-- **字段校验**：`POST`/`PATCH` 在 Route Handler 里手写校验（标题非空、`category`/`priority` 必须落在枚举值内），不合法直接返回 400 加错误信息。
-- **业务字段**：每个任务除标题外还有分类（`仕事/プライベート/勉強/その他`）、优先级（`high/medium/low`）、截止日期，`lib/todoStatus.ts` 会判断任务是否已过期/今天到期。
-- **OpenAPI 文档**：所有接口定义写在 `openapi.yaml` 里，`/api-docs` 页面用 Scalar 把它渲染成可以直接试调用的交互式文档，修改接口后记得同步改这个文件。
+- **CRUD**：`GET/POST /api/todos`、`GET/PATCH/DELETE /api/todos/{id}` で、タスクの作成・参照・更新・削除に対応。
+- **絞り込みと並び替え**：`GET /api/todos?status=active&sort=dueDate` —— `status` は `all/active/completed`、`sort` は `createdAt/dueDate/priority` に対応（ロジックは `lib/todoQuery.ts`）。
+- **入力バリデーション**：`POST`/`PATCH` は Route Handler 内で手書きのバリデーションを行う（タイトルが空でないこと、`category`/`priority` が列挙値に収まっていること）。不正な場合はエラーメッセージ付きで 400 を返す。
+- **業務フィールド**：各タスクにはタイトルの他に、カテゴリ（`仕事/プライベート/勉強/その他`）、優先度（`high/medium/low`）、期限日がある。`lib/todoStatus.ts` がタスクの期限切れ／今日が期限かどうかを判定する。
+- **OpenAPI ドキュメント**：すべての API 定義は `openapi.yaml` に書かれており、`/api-docs` ページで Scalar がそのまま試し打ちできる操作可能なドキュメントに変換する。API を変更したらこのファイルも忘れずに更新すること。
 
-## 用 curl 测试
+## curl での動作確認
 
 ```bash
-# 新建一条任务
+# タスクを新規作成
 curl -X POST http://localhost:3000/api/todos \
   -H "Content-Type: application/json" \
-  -d '{"title":"写周报","category":"仕事","priority":"high","dueDate":"2026-08-25"}'
+  -d '{"title":"週報を書く","category":"仕事","priority":"high","dueDate":"2026-08-25"}'
 
-# 查看列表（按优先级排序，只看未完成的）
+# 一覧を取得（優先度順、未完了のみ）
 curl "http://localhost:3000/api/todos?status=active&sort=priority"
 ```
 
-## 数据库情况
+## データベースについて
 
-用的是 **SQLite**（不是内存数据），通过 Node.js 内置的 `node:sqlite` 模块直接读写本地文件 `data/todos.db`，没有额外的数据库服务器、没有 ORM。表结构在 `lib/db.ts` 里用一句 `CREATE TABLE IF NOT EXISTS` 定义，首次启动自动建表。这个文件默认不会提交到 git（见根目录 `.gitignore`），每个人本地跑起来都是一份独立、干净的数据。
+使っているのは **SQLite**（メモリ上のデータではない）で、Node.js 組み込みの `node:sqlite` モジュールを使い、ローカルファイル `data/todos.db` に直接読み書きしている。追加のデータベースサーバーや ORM は使っていない。テーブル定義は `lib/db.ts` の `CREATE TABLE IF NOT EXISTS` の一文だけで、初回起動時に自動的に作成される。このファイルはデフォルトで git にコミットされないため（ルートの `.gitignore` を参照）、各自のローカル環境は毎回独立したまっさらなデータから始まる。

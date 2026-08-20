@@ -1,125 +1,125 @@
-# 商品浏览页面 Demo
+# 商品一覧ページ Demo
 
-[日本語版はこちら](README.ja.md)
+**認証（JWT）・ページネーション・キャッシュ**の3つのポイントを練習するための、最小構成のフルスタック Demo。フロントエンドとバックエンドを分離し、あえてデータベース・状態管理ライブラリ・UI コンポーネントライブラリなどの余計な複雑さを持ち込まず、この3つのテーマそのものに集中している。
 
-一个用来练习**认证（JWT）、分页、缓存**三个知识点的最小化全栈 Demo。前后端分离，故意不引入数据库、状态管理库、组件库等额外复杂度，聚焦在这三件事本身。
+## 技術スタック
 
-## 技术栈
-
-| | 技术 |
+| | 技術 |
 |---|---|
-| 前端 | Next.js 16（App Router）+ TypeScript + Tailwind CSS |
-| 后端 | FastAPI + PyJWT（签发/校验 JWT）+ Passlib/Bcrypt（密码加密） |
-| 数据 | 全部写死在内存里，没有数据库，重启进程即重置 |
+| フロントエンド | Next.js 16（App Router）+ TypeScript + Tailwind CSS |
+| バックエンド | FastAPI + PyJWT（JWT の発行・検証）+ Passlib/Bcrypt（パスワード暗号化） |
+| データ | すべてメモリ上にハードコードしたデータで、データベースは使わない |
 
-## 前置要求
+## ディレクトリ構成
 
-- Python 3.10+（本地开发用的是 3.14）
+```
+product-demo/
+├── backend/
+│   ├── main.py            # バックエンドは1ファイルのみ：ログイン、JWT 検証、ページネーション、キャッシュが全部ここにある
+│   └── requirements.txt
+└── frontend/
+    ├── app/
+    │   ├── page.tsx        # ルートパス：localStorage に token があるかどうかでリダイレクト先を決める
+    │   ├── login/page.tsx   # ログインページ
+    │   └── products/page.tsx # 商品一覧ページ（ページネーション + キャッシュ状態の表示）
+    └── lib/api.ts           # fetch のラッパー：ログイン、商品取得、token の保存/取得
+```
+
+なぜフロントエンドとバックエンドを別々に起動する必要があるのか：これらは独立した2つのプロセスだから。バックエンド（8000番ポート）は純粋な API で、画面のレンダリングは一切しない。フロントエンド（デフォルト3000番ポート、使用中なら自動的に変更される）は Web ページで、裏側で `fetch` を使ってバックエンドを呼び出している。ブラウザで開くのはフロントエンドのアドレスだけでよい。
+
+## 前提条件
+
+- Python 3.10+（開発時は 3.14 を使用）
 - Node.js 18+
-- 两个服务分别监听 `8000`（后端）和 `3000`（前端，被占用时自动改用其他端口，比如 3002）
+- 8000番ポート（バックエンド）と 3000番ポート（フロントエンド）が空いていること
 
-## 快速开始
+## 起動方法
 
 ```bash
-# 1. 后端
+# バックエンド
 cd backend
 python3 -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 
-# 2. 前端（另开一个终端）
+# フロントエンド（別のターミナルで）
 cd frontend
 npm install
 npm run dev
 ```
 
-浏览器打开前端终端打印出的地址（一般是 `http://localhost:3000`，3000 被占用时会自动改成 3002 等）。
+フロントエンドが起動時に表示するアドレスをブラウザで開く（通常は http://localhost:3000 、ポートが使用中の場合は 3002 など）。
 
-测试账号（写死在 `backend/main.py` 的 `USERS` 里）：
+テストアカウント（`backend/main.py` の `USERS` にハードコードされている）：
 
 - `test / 123456`
 - `alice / password`
 
-## 目录结构
+## 1. 認証（JWT）
 
-```
-product-demo/
-├── backend/
-│   ├── main.py            # 唯一的后端文件：登录、JWT 校验、分页、缓存全在这里
-│   └── requirements.txt
-└── frontend/
-    ├── app/
-    │   ├── page.tsx         # 根路径：按 localStorage 里有没有 token 跳转
-    │   ├── login/page.tsx   # 登录页
-    │   └── products/page.tsx # 商品列表页（分页 + 缓存状态展示）
-    └── lib/api.ts           # fetch 封装：登录、取商品、token 存取
-```
+**関連ファイル**：`backend/main.py`（`USERS`、`create_access_token`、`get_current_user`、`/login`）、`frontend/lib/api.ts`、`frontend/app/login/page.tsx`、`frontend/app/products/page.tsx`
 
-## 1. 认证（JWT）
+流れ：
 
-**涉及文件**：`backend/main.py`（`USERS`、`create_access_token`、`get_current_user`、`/login`）、`frontend/lib/api.ts`、`frontend/app/login/page.tsx`、`frontend/app/products/page.tsx`
+1. バックエンド起動時、`USERS` 配列にあらかじめ1〜2個のアカウントをハードコードしてある。パスワードは `passlib` の `bcrypt.hash()` で事前に暗号化して保存している（平文のパスワードは一切保存しない）。
+2. ユーザーがログインページでユーザー名とパスワードを入力 → フロントエンドが `POST /login` を実行。
+3. バックエンドは `USERS` から同名のユーザーを探し、`pwd_context.verify()` でパスワードを検証する。一致すれば `create_access_token()` を呼び出し、`PyJWT` で JWT を発行する（payload には `sub`=ユーザー名、`exp`=2時間後の有効期限を含む）。これをフロントエンドに返す。
+4. フロントエンドは受け取った `access_token` を `localStorage` に保存し（`lib/api.ts` の `setToken`）、`/products` へ遷移する。
+5. 以降、`/products` へリクエストするたびに、フロントエンドは `localStorage` から token を取り出し、リクエストヘッダー `Authorization: Bearer <token>` に付与する。
+6. バックエンドは依存関数 `get_current_user`（`Depends`）で `/products` をガードしている：リクエストヘッダーから token を取り出し、`jwt.decode` で署名と有効期限を検証する。token がない／無効／期限切れの場合は 401 を返す。
+7. フロントエンドは 401 を受け取ると、`localStorage` の token をクリアしてログインページへ戻す。`/products` ページの読み込み時にも token の有無を先にチェックしており、token がなければリクエストを送る前に即座にリダイレクトする。
 
-流程：
+ここでは refresh token、httpOnly cookie、権限レベルの分岐などは実装していない。あえて簡略化したバージョンであり、「発行 → 保持・送信 → 検証」という最も核心的な一連の流れだけを示すことが目的。
 
-1. 后端启动时，`USERS` 数组里已经写死了 1-2 个账号，密码用 `passlib` 的 `bcrypt.hash()` 提前加密存好（明文密码从来不落地）。
-2. 用户在登录页输入用户名密码 → 前端 `POST /login`。
-3. 后端在 `USERS` 里找到同名用户，用 `pwd_context.verify()` 校验密码；对的话调用 `create_access_token()`，用 `PyJWT` 签发一个 JWT（payload 里带 `sub`=用户名、`exp`=2 小时后过期），返回给前端。
-4. 前端拿到 `access_token` 后存进 `localStorage`（`lib/api.ts` 的 `setToken`），然后跳转到 `/products`。
-5. 之后每次请求 `/products`，前端都从 `localStorage` 取出 token，加到请求头 `Authorization: Bearer <token>`。
-6. 后端用依赖函数 `get_current_user`（`Depends`）拦截 `/products`：从请求头解析 token，`jwt.decode` 校验签名和过期时间；没带 token / token 无效或过期 → 返回 401。
-7. 前端收到 401，清空 `localStorage` 里的 token 并跳回登录页；`/products` 页面加载时也会主动检查有没有 token，没有直接跳转，不会先发请求再等 401。
+## 2. ページネーション
 
-这里没有 refresh token、没有 httpOnly cookie、没有权限分级，是刻意简化过的版本，只演示"签发 → 携带 → 校验"这个最核心的闭环。
+**関連ファイル**：`backend/main.py`（`PRODUCTS`、`/products` 内のスライス処理）、`frontend/app/products/page.tsx`
 
-## 2. 分页
+- バックエンドには25件の商品データ（`PRODUCTS`）をハードコードしてある。各商品は `id / name / price / description` のみを持つ。
+- `/products?page=1&size=10` では：
+  - `start = (page - 1) * size`、`end = start + size` とし、`PRODUCTS[start:end]` で該当ページのデータを切り出す。
+  - `total = len(PRODUCTS)`、`total_pages = ceil(total / size)` を計算する。
+- レスポンスには常に `page / size / total / total_pages` を含めており、フロントエンドはこれらの値を使って「前のページ／次のページ」ボタンを無効化するかどうかを判断する（`page <= 1` なら前のページを無効化、`page >= total_pages` なら次のページを無効化）。
+- フロントエンドの `products/page.tsx` では `page` を `useState` で管理しており、ボタンをクリックするとこの state を更新し、`useEffect` が `page` の変化を監視して自動的に再リクエストする。
 
-**涉及文件**：`backend/main.py`（`PRODUCTS`、`/products` 里的切片逻辑）、`frontend/app/products/page.tsx`
+## 3. キャッシュ（あえて2つの層に分けている。混同しやすいので下の比較を参照）
 
-- 后端写死了 25 条商品（`PRODUCTS`），每条只有 `id / name / price / description`。
-- `/products?page=1&size=10` 里：
-  - `start = (page - 1) * size`，`end = start + size`，用 `PRODUCTS[start:end]` 切出当页数据。
-  - `total = len(PRODUCTS)`，`total_pages = ceil(total / size)`。
-- 响应统一带上 `page / size / total / total_pages`，前端靠这几个字段判断"上一页/下一页"按钮要不要禁用（`page <= 1` 禁用上一页，`page >= total_pages` 禁用下一页）。
-- 前端 `products/page.tsx` 用一个 `page` 的 `useState` 记录当前页，点击按钮改这个 state，`useEffect` 监听 `page` 变化自动重新请求。
+### 3.1 バックエンドのメモリキャッシュ（アプリケーション層のキャッシュ）—— 今回の練習の本題
 
-## 3. 缓存（这里特意分了两层，容易搞混，见下面的对比）
+**関連ファイル**：`backend/main.py` の `CACHE`、`CACHE_TTL_SECONDS`
 
-### 3.1 后端内存缓存（应用层缓存）—— 这次练习的重点
+- グローバルな辞書 `CACHE` を使って「ページネーションのパラメータ → データ」を保存する。key は `f"{page}_{size}"` としている。この demo には検索・フィルタのパラメータがないため、page + size だけで1回のクエリを一意に特定できる。
+- **有効期限**は `backend/main.py` の定数 `CACHE_TTL_SECONDS = 60`（書き込み時刻の60秒後に失効する。この数値だけを変更すればよく、他の箇所は変更不要）。
+- **読み込みロジック**：リクエストが来たらまず `cache_key` を計算し、`CACHE` に対応するレコードがあり、かつ失効していなければ → 保存済みのデータをそのまま返し、`from_cache: true` とする。それ以外（レコードがない／失効している／`refresh=true` が付いている）の場合 → `PRODUCTS` を再度クエリする（ここでの「クエリ」は単なる再スライスだが、実際のシステムにおけるデータベースへの問い合わせや下流サービス呼び出しのコストを模している）。新しい結果を新しい失効時刻とともに `CACHE` に書き戻し、`from_cache: false` を返す。
+- `?refresh=true` を付けるとキャッシュの判定を強制的にスキップし、直接「再クエリ」の分岐に入る。手動でキャッシュ失効の挙動をテストするのに使える。
 
-**涉及文件**：`backend/main.py` 的 `CACHE`、`CACHE_TTL_SECONDS`
+ポイント：**この層のキャッシュがヒットしたときも、リクエストは実際にバックエンドサーバーまで届いている**。サーバー側が「サボって」再計算していないだけであり、ブラウザの Network パネルにはこのリクエストがちゃんと表示される。レスポンスボディの `from_cache` フィールドがその証拠。
 
-- 用一个全局字典 `CACHE` 存 `"分页参数 -> 数据"`，key 是 `f"{page}_{size}"`，因为这个 demo 没有搜索/筛选参数，page+size 已经能唯一确定一次查询。
-- **过期时间**在 `backend/main.py` 里的常量 `CACHE_TTL_SECONDS = 60`（写入时刻 + 60 秒后过期，改这一个数字就行，其他地方不用动）。
-- **读取逻辑**：请求进来先算 `cache_key`，如果 `CACHE` 里有对应记录且没过期 → 直接返回存的数据，`from_cache: true`；否则（没有 / 过期 / 带了 `refresh=true`）→ 重新查一遍 `PRODUCTS`（这里"查"只是重新切片，模拟真实场景里查数据库/调用下游服务的开销），把新结果连同新的过期时间写回 `CACHE`，返回 `from_cache: false`。
-- `?refresh=true` 可以强制跳过缓存判断，直接走"重新查询"分支，方便手动测试缓存失效的效果。
+### 3.2 HTTP層のキャッシュ（Cache-Control / max-age）—— 比較用であり、今回の練習の本題ではない
 
-关键点：**命中这层缓存时，请求依然是真实打到后端服务器的**，只是服务器偷懒没有重新计算，所以你在浏览器 Network 面板里能看到这次请求，响应体里 `from_cache` 字段就是证据。
+**関連ファイル**：`backend/main.py` の `/products` 内で設定している `response.headers["Cache-Control"]`
 
-### 3.2 HTTP 层缓存（Cache-Control / max-age）—— 对比用，不是本次练习重点
+- 通常のリクエスト：レスポンスヘッダーに `Cache-Control: max-age=15`（定数 `HTTP_CACHE_MAX_AGE_SECONDS`）を付与し、「このレスポンスは15秒以内であればそのまま再利用してよく、サーバーに問い合わせ直す必要はない」とブラウザに伝える。
+- `refresh=true` のリクエスト：レスポンスヘッダーは `Cache-Control: no-store` となり、「これはキャッシュしてはいけない」と明示的にブラウザへ伝える。
 
-**涉及文件**：`backend/main.py` 里 `/products` 设置的 `response.headers["Cache-Control"]`
+ポイント：この層のキャッシュがヒットしたときは、**リクエストはそもそも実際には送信されない**——ブラウザがローカルで前回のレスポンスをそのまま返しているだけであり、Network パネルには `(memory cache)` / `(disk cache)` と表示され、バックエンド側はこの「リクエスト」が発生したことすら一切関知しない。
 
-- 正常请求：响应头带 `Cache-Control: max-age=15`（常量 `HTTP_CACHE_MAX_AGE_SECONDS`），告诉浏览器"这份响应 15 秒内可以直接复用，不用再问服务器"。
-- `refresh=true` 请求：响应头是 `Cache-Control: no-store`，明确告诉浏览器这份不许缓存。
+### 2つのキャッシュ層をどう見分けるか
 
-关键点：这层缓存命中时，**请求根本不会真正发出去**——浏览器自己在本地把上次的响应吐出来了，Network 面板里会显示 `(memory cache)` / `(disk cache)`，后端完全不知道这次"请求"发生过。
+ブラウザの DevTools → Network パネルで、同じページへの連続したリクエストを観察する：
 
-### 两层缓存怎么区分着看
-
-在浏览器 DevTools → Network 面板里观察同一页的连续请求：
-
-| 时间窗口 | Network 面板现象 | 响应体 `from_cache` |
+| 時間の経過 | Network パネル上の現象 | レスポンスボディの `from_cache` |
 |---|---|---|
-| 15 秒内刷新 | 请求不会真正发出（`(disk/memory cache)`），HTTP 层缓存生效 | 看不到响应体，因为请求没发出 |
-| 15～60 秒内刷新 | 请求真实发出，Status 200 | `true`（HTTP 缓存过期了，但后端内存缓存还没过期） |
-| 超过 60 秒刷新 | 请求真实发出，Status 200 | `false`（两层缓存都过期，真的重新查了） |
-| 点"强制刷新"按钮 | 请求真实发出（`no-store` 禁止浏览器缓存） | `false`（后端也跳过了内存缓存） |
+| 15秒以内に再読み込み | リクエストは実際には送信されない（`(disk/memory cache)`）。HTTP層のキャッシュが有効になっている | レスポンスボディは見えない（リクエストが送信されていないため） |
+| 15〜60秒の間に再読み込み | リクエストが実際に送信され、Status 200 | `true`（HTTP キャッシュは失効したが、バックエンドのメモリキャッシュはまだ有効） |
+| 60秒を超えてから再読み込み | リクエストが実際に送信され、Status 200 | `false`（両方の層のキャッシュが失効しており、本当に再クエリしている） |
+| 「強制リフレッシュ」ボタンをクリック | リクエストが実際に送信される（`no-store` によりブラウザのキャッシュが禁止される） | `false`（バックエンド側もメモリキャッシュをスキップしている） |
 
-## 数据库情况
+## データベースについて
 
-**没有数据库**，这是故意的设计：用户（`USERS`）和商品（`PRODUCTS`）都是硬编码在 `backend/main.py` 里的 Python 列表，缓存（`CACHE`）也只是进程内存里的字典。重启后端进程，这三份数据都会重置，没有任何持久化存储。
+**データベースは存在しない**。これは意図的な設計で、ユーザー（`USERS`）と商品（`PRODUCTS`）はどちらも `backend/main.py` にハードコードされた Python のリスト、キャッシュ（`CACHE`）もプロセスのメモリ上の辞書にすぎない。バックエンドのプロセスを再起動すると、この3つのデータはすべてリセットされる。永続化されたストレージは一切ない。
 
-## 已知的坑（踩过的）
+## 既知の落とし穴（実際にハマったもの）
 
-- `passlib` + 新版 `bcrypt`（4.1+）不兼容：bcrypt 4.1 起对超长密码从"静默截断"改成抛异常，导致 passlib 启动时的自检直接崩溃报 `password cannot be longer than 72 bytes`。已在 `requirements.txt` 锁定 `bcrypt==4.0.1` 解决，不需要再处理。
+- `passlib` と新しいバージョンの `bcrypt`（4.1以降）の非互換性：bcrypt 4.1 以降、長すぎるパスワードに対する挙動が「暗黙に切り詰める」から「例外を投げる」に変わったため、passlib 起動時の自己診断処理がそのままクラッシュし、`password cannot be longer than 72 bytes` というエラーになる。`requirements.txt` で `bcrypt==4.0.1` に固定することで解決済みであり、追加対応は不要。
