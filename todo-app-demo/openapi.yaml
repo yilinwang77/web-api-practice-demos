@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: Todo App API
+  description: やることリストアプリのバックエンド API
+  version: 1.0.0
+servers:
+  - url: /api
+    description: 現在のオリジン
+tags:
+  - name: todos
+    description: タスクの CRUD 操作
+paths:
+  /todos:
+    get:
+      tags: [todos]
+      summary: タスク一覧を取得
+      parameters:
+        - name: status
+          in: query
+          description: 完了状態でフィルタ
+          schema:
+            type: string
+            enum: [all, active, completed]
+            default: all
+        - name: sort
+          in: query
+          description: 並び替えキー
+          schema:
+            type: string
+            enum: [createdAt, dueDate, priority]
+            default: createdAt
+      responses:
+        "200":
+          description: タスク一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Todo"
+    post:
+      tags: [todos]
+      summary: タスクを新規作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TodoInput"
+      responses:
+        "201":
+          description: 作成されたタスク
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "400":
+          description: 入力が不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /todos/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [todos]
+      summary: タスクを1件取得
+      responses:
+        "200":
+          description: タスク
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "404":
+          description: 見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      tags: [todos]
+      summary: タスクを更新（部分更新）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TodoPatch"
+      responses:
+        "200":
+          description: 更新後のタスク
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "400":
+          description: 入力が不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: 見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [todos]
+      summary: タスクを削除
+      responses:
+        "204":
+          description: 削除成功
+        "404":
+          description: 見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    TodoCategory:
+      type: string
+      enum: ["仕事", "プライベート", "勉強", "その他"]
+    TodoPriority:
+      type: string
+      enum: [high, medium, low]
+    Todo:
+      type: object
+      required: [id, title, completed, category, priority, dueDate, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        completed:
+          type: boolean
+        category:
+          $ref: "#/components/schemas/TodoCategory"
+        priority:
+          $ref: "#/components/schemas/TodoPriority"
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    TodoInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        category:
+          $ref: "#/components/schemas/TodoCategory"
+        priority:
+          $ref: "#/components/schemas/TodoPriority"
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+    TodoPatch:
+      type: object
+      properties:
+        title:
+          type: string
+        completed:
+          type: boolean
+        category:
+          $ref: "#/components/schemas/TodoCategory"
+        priority:
+          $ref: "#/components/schemas/TodoPriority"
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
