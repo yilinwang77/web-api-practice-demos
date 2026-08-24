@@ -8,6 +8,7 @@ Web API の練習用プロジェクトをまとめたリポジトリ。各サブ
 |---|---|---|
 | [`product-demo/`](product-demo/README.md) | 認証（JWT）・ページネーション・キャッシュ | Next.js + FastAPI |
 | [`todo-app-demo/`](todo-app-demo/README.md) | REST API 設計（CRUD）・OpenAPI ドキュメント・SQLite | Next.js（App Router API Routes） |
+| [`book-select-fastAPI/`](book-select-fastAPI/README.md) | 条件検索・ソート・ページネーション（Offset / Cursor） | FastAPI + SQLite |
 
 具体的な起動方法や練習内容は、それぞれのフォルダの `README.md` を参照。
 

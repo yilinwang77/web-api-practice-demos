@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>Book Select</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  form input, form select { padding: 0.3rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #ddd; }
+  .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; }
+  .meta { color: #666; font-size: 0.9rem; margin-bottom: 0.5rem; }
+  #error { color: #c00; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+<h1>Book Select</h1>
+
+<form id="filterForm">
+  <select name="category">
+    <option value="">カテゴリ（全て）</option>
+    <option value="小説">小説</option>
+    <option value="技術書">技術書</option>
+    <option value="漫画">漫画</option>
+    <option value="その他">その他</option>
+  </select>
+  <input type="number" name="min_price" placeholder="min_price" />
+  <input type="number" name="max_price" placeholder="max_price" />
+  <input type="text" name="keyword" placeholder="keyword（タイトル検索）" />
+  <select name="sort_by">
+    <option value="">sort_by（なし）</option>
+    <option value="id">id</option>
+    <option value="price">price</option>
+    <option value="created_at">created_at</option>
+  </select>
+  <select name="order">
+    <option value="asc">asc</option>
+    <option value="desc">desc</option>
+  </select>
+  <button type="submit">検索</button>
+</form>
+
+<div id="error"></div>
+<div class="meta" id="meta"></div>
+
+<table>
+  <thead>
+    <tr><th>id</th><th>title</th><th>category</th><th>price</th><th>created_at</th></tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<div class="pager">
+  <button id="prevBtn">← 前へ</button>
+  <span id="pageLabel"></span>
+  <button id="nextBtn">次へ →</button>
+</div>
+
+<script>
+let page = 1;
+const pageSize = 10;
+
+async function load() {
+  const form = new FormData(document.getElementById("filterForm"));
+  const params = new URLSearchParams({ page, page_size: pageSize });
+  for (const [key, value] of form.entries()) {
+    if (value) params.set(key, value);
+  }
+
+  const res = await fetch(`/books?${params.toString()}`);
+  const errorEl = document.getElementById("error");
+  const data = await res.json();
+
+  if (!res.ok) {
+    errorEl.textContent = JSON.stringify(data.detail);
+    document.getElementById("rows").innerHTML = "";
+    document.getElementById("meta").textContent = "";
+    return;
+  }
+  errorEl.textContent = "";
+
+  document.getElementById("rows").innerHTML = data.items.map(b =>
+    `<tr><td>${b.id}</td><td>${b.title}</td><td>${b.category}</td><td>${b.price}</td><td>${b.created_at}</td></tr>`
+  ).join("");
+
+  document.getElementById("meta").textContent =
+    `total: ${data.total} / page ${data.page} of ${data.total_pages}`;
+  document.getElementById("pageLabel").textContent = `${data.page} / ${data.total_pages || 1}`;
+  document.getElementById("prevBtn").disabled = data.page <= 1;
+  document.getElementById("nextBtn").disabled = data.page >= data.total_pages;
+}
+
+document.getElementById("filterForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  page = 1;
+  load();
+});
+document.getElementById("prevBtn").addEventListener("click", () => { page--; load(); });
+document.getElementById("nextBtn").addEventListener("click", () => { page++; load(); });
+
+load();
+</script>
+</body>
+</html>
