@@ -1,62 +1,75 @@
-"""动态拼接 SQL：WHERE 筛选 -> ORDER BY 排序 -> LIMIT/OFFSET 分页。"""
-from database import get_connection
+"""用 SQLAlchemy 查询实现 CRUD：filter 筛选 -> order_by 排序 -> offset/limit 分页。"""
+from datetime import datetime
+
+from sqlalchemy import asc, desc
+from sqlalchemy.orm import Session
+
+from models import Book
+from schemas import BookCreate, BookUpdate
+
+# sort_by 白名单：schemas.py 里 Literal["price", "created_at", "id"] 已经把
+# 输入限制成这三个字符串之一，这里再映射到模型上真实的 Column 对象——
+# 排序永远走 SQLAlchemy 的表达式，不会有拼接用户输入到 SQL 里的情况。
+SORTABLE_COLUMNS = {"id": Book.id, "price": Book.price, "created_at": Book.created_at}
 
 
-def _build_where(params) -> tuple[str, list]:
-    """根据查询参数拼出 WHERE 子句，值全部用 ? 占位符传参，不做字符串拼接。"""
-    conditions = []
-    values = []
-
+def _apply_filters(query, params):
     if params.category:
-        conditions.append("category = ?")
-        values.append(params.category)
-
+        query = query.filter(Book.category == params.category)
     if params.min_price is not None:
-        conditions.append("price >= ?")
-        values.append(params.min_price)
-
+        query = query.filter(Book.price >= params.min_price)
     if params.max_price is not None:
-        conditions.append("price <= ?")
-        values.append(params.max_price)
-
+        query = query.filter(Book.price <= params.max_price)
     if params.keyword:
-        conditions.append("title LIKE ?")
-        values.append(f"%{params.keyword}%")
-
-    where_sql = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-    return where_sql, values
+        query = query.filter(Book.title.like(f"%{params.keyword}%"))
+    return query
 
 
-def list_books(params) -> tuple[list[dict], int]:
+def list_books(db: Session, params) -> tuple[list[Book], int]:
     """按条件筛选 + 排序 + 分页，返回 (当页数据, 总条数)。"""
-    where_sql, values = _build_where(params)
-    conn = get_connection()
+    query = _apply_filters(db.query(Book), params)
+    total = query.count()
 
-    total = conn.execute(f"SELECT COUNT(*) FROM books{where_sql}", values).fetchone()[0]
-
-    order_sql = ""
     if params.sort_by:
-        # sort_by / order 的值已经在 schemas.py 里用 Literal 做过白名单校验，
-        # 到这里只可能是固定的几个字符串之一，所以可以放心直接拼进 SQL——
-        # 列名和排序方向本来就不能用 ? 占位符，只有"值已被限定在白名单内"才安全。
-        order_sql = f" ORDER BY {params.sort_by} {params.order.upper()}"
+        column = SORTABLE_COLUMNS[params.sort_by]
+        query = query.order_by(desc(column) if params.order == "desc" else asc(column))
 
     offset = (params.page - 1) * params.page_size
-    rows = conn.execute(
-        f"SELECT * FROM books{where_sql}{order_sql} LIMIT ? OFFSET ?",
-        [*values, params.page_size, offset],
-    ).fetchall()
-    conn.close()
-
-    return [dict(row) for row in rows], total
+    items = query.offset(offset).limit(params.page_size).all()
+    return items, total
 
 
-def list_books_cursor(cursor: int, limit: int) -> list[dict]:
+def list_books_cursor(db: Session, cursor: int, limit: int) -> list[Book]:
     """Cursor 分页：取 id 大于 cursor 的下 limit 条，按 id 升序排列。"""
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM books WHERE id > ? ORDER BY id ASC LIMIT ?",
-        (cursor, limit),
-    ).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    return db.query(Book).filter(Book.id > cursor).order_by(asc(Book.id)).limit(limit).all()
+
+
+def get_book(db: Session, book_id: int) -> Book | None:
+    return db.query(Book).filter(Book.id == book_id).first()
+
+
+def create_book(db: Session, book_in: BookCreate) -> Book:
+    book = Book(
+        title=book_in.title,
+        category=book_in.category,
+        price=book_in.price,
+        created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    )
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
+def update_book(db: Session, book: Book, book_in: BookUpdate) -> Book:
+    book.title = book_in.title
+    book.category = book_in.category
+    book.price = book_in.price
+    db.commit()
+    db.refresh(book)
+    return book
+
+
+def delete_book(db: Session, book: Book) -> None:
+    db.delete(book)
+    db.commit()

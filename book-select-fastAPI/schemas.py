@@ -1,7 +1,7 @@
 """Pydantic 模型：请求参数校验 + 响应结构定义。"""
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Category = Literal["小説", "技術書", "漫画", "その他"]
 # sort_by 白名单：只允许这三个字段，Pydantic 的 Literal 在这里就是"白名单校验"，
@@ -31,11 +31,31 @@ class BookQueryParams(BaseModel):
 
 
 class BookOut(BaseModel):
+    # from_attributes=True：允许直接从 SQLAlchemy 的 Book 对象读取属性，
+    # 不用先手动转成 dict。
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     category: str
     price: float
     created_at: str
+
+
+class BookBase(BaseModel):
+    """POST / PUT 请求体的公共字段。"""
+
+    title: str = Field(..., min_length=1)
+    category: Category
+    price: float = Field(..., ge=0)
+
+
+class BookCreate(BookBase):
+    pass
+
+
+class BookUpdate(BookBase):
+    pass
 
 
 class AppliedFilters(BaseModel):
